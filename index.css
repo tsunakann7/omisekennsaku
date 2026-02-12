@@ -11,6 +11,7 @@ body {
   flex-direction:column;
   padding:8px;
   background:#f8f8f8;
+  z-index: 1000;
 }
 
 .weekday-buttons {

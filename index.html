@@ -2,14 +2,40 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>店舗マップ（営業時間表示付き）</title>
+<title>高知 飲食店マップ（日時フィルタ付き）</title>
+
+<!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+
 <style>
-  #map { height: 90vh; margin-top: 10px; }
-  .weekday-buttons button { margin-right: 4px; padding: 4px 8px; }
-  .weekday-buttons button.active { font-weight: bold; background-color: #ddd; }
+  body { margin:0; font-family: sans-serif; }
+  #controls {
+    padding: 8px;
+    background:#fff;
+    box-shadow: 0 0 4px rgba(0,0,0,0.2);
+    z-index: 1000;
+  }
+  .weekday-buttons {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+  .weekday-buttons button {
+    padding: 6px 12px;
+    border:none;
+    border-radius:4px;
+    background:#ddd;
+    cursor:pointer;
+  }
+  .weekday-buttons button.active {
+    background:#4CAF50;
+    color:white;
+  }
+  #time-label { margin-right: 10px; }
+  #map { height: 85vh; }
 </style>
 </head>
 <body>
@@ -24,28 +50,57 @@
     <button data-day="5">土</button>
     <button data-day="6">日</button>
   </div>
-  <div id="time-label">時間: 12:00</div>
-  <input type="range" id="time-slider" min="0" max="23" value="12">
+
+  <span id="time-label">時間: 12:00</span>
+  <input type="range" id="time-slider" min="0" max="23.5" step="0.5" value="12">
 </div>
 
 <div id="map"></div>
 
+<!-- Leaflet JS + MarkerCluster -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script>
 
-// --- 店舗データ ---
-// ここに全店舗データを貼り付けてください
+<script>
+// --- 店舗データ (ここに全店舗を貼り付ける) ---
 const restaurants = [
   { name:"すき家 本町店", lat:33.5590, lng:133.5310, hours:[[0,4,27],[1,4,27],[2,4,27],[3,4,27],[4,4,27],[5,4,27],[6,4,27]] },
+  { name:"すき家 杉井流店", lat:33.5560, lng:133.5350, hours:[[0,4,27],[1,4,27],[2,4,27],[3,4,27],[4,4,27],[5,4,27],[6,4,27]] },
   { name:"吉野家 高知 高そね店", lat:33.5580, lng:133.5400, hours:[[0,0,24],[1,0,24],[2,0,24],[3,0,24],[4,0,24],[5,0,24],[6,0,24]] },
-  { name:"CoCo壱番屋 高知 はりまや橋店", lat:33.5595, lng:133.5325, hours:[[0,10.5,22],[1,10.5,22],[2,10.5,22],[3,10.5,22],[4,10.5,22],[5,10.5,22],[6,10.5,22]] }
-  // ...残りの全店舗データをここに貼ってください
+  { name:"CoCo壱番屋 高知 はりまや橋店", lat:33.5595, lng:133.5325, hours:[[0,10.5,22],[1,10.5,22],[2,10.5,22],[3,10.5,22],[4,10.5,22],[5,10.5,22],[6,10.5,22]] },
+  { name:"鍋焼きラーメン 千秋", lat:33.568864, lng:133.545006, hours:[[0,10,22],[1,10,22],[2,10,22],[3,10,22],[4,10,22],[5,10,22],[6,10,22]] },
+  { name:"土佐料理 司", lat:33.560426, lng:133.542154, hours:[[0,12,20],[1,12,20],[2,12,20],[3,12,20],[4,12,20],[5,12,20],[6,12,20]] },
+  { name:"ひろめ市場", lat:33.560547, lng:133.535676, hours:[[0,10,23],[1,10,23],[2,10,23],[3,10,23],[4,10,23],[5,10,23],[6,10,23]] },
+  { name:"Myojinmaru Hirome Market Store", lat:33.560547, lng:133.535676, hours:[[0,11,21],[1,11,21],[2,11,21],[3,11,21],[4,11,21],[5,11,21],[6,10,20]] },
+  { name:"やいろ亭", lat:33.560582, lng:133.535704, hours:[[0,10,21],[1,10,21],[2,10,21],[3,10,21],[4,10,21],[5,10,21],[6,10,21]] },
+  { name:"SuigeiTei", lat:33.55886, lng:133.54381, hours:[[0,17,22],[1,17,22],[2,17,22],[3,17,22],[4,17,22],[5,17,22],[6,17,22]] },
+  { name:"高知 座屋", lat:33.56108, lng:133.53689, hours:[[0,12,14],[0,17,23],[1,12,14],[1,17,23],[2,12,14],[2,17,23],[3,12,14],[3,17,23],[4,12,14],[4,17,23],[5,12,14],[5,17,23],[6,12,14],[6,17,23]] },
+  { name:"Torishin Honten", lat:33.5592, lng:133.544, hours:[[0,11,14],[1,11,14],[2,11,14],[3,11,14],[4,11,14],[5,11,14],[6,11,14]] },
+  { name:"Tosa Ichiba", lat:33.5601, lng:133.541, hours:[[0,11,21],[1,11,21],[2,11,21],[3,11,21],[4,11,21],[5,11,21],[6,11,21]] },
+  { name:"レストラン コックドール", lat:33.5602, lng:133.535, hours:[[0,11,14],[1,11,14],[2,11,14],[3,11,14],[4,11,14],[5,11,14],[6,11,14]] },
+  { name:"ハングリー ベア", lat:33.562, lng:133.537, hours:[[0,11,14],[1,11,14],[2,11,14],[3,11,14],[4,11,14],[5,11,14],[6,11,14]] },
+  { name:"Habotan", lat:33.5585, lng:133.544, hours:[[0,11,23],[1,11,23],[2,11,23],[3,11,23],[4,11,23],[5,11,23],[6,11,23]] },
+  { name:"Shiki", lat:33.5597, lng:133.541, hours:[[0,8,20],[1,8,20],[2,8,20],[3,8,20],[4,8,20],[5,8,20],[6,8,20]] },
+  { name:"coccolo", lat:33.560, lng:133.536, hours:[[0,11,14],[1,11,14],[2,11,14],[3,11,14],[4,11,14],[5,11,14],[6,11,14]] },
+  { name:"DEWATA BALI CAFE", lat:33.559, lng:133.536, hours:[[0,11,15],[1,11,15],[2,11,15],[3,11,15],[4,11,15],[5,11,15],[6,11,15]] },
+  { name:"利他食堂", lat:33.558, lng:133.545, hours:[[0,17,23],[1,17,23],[2,17,23],[3,17,23],[4,17,23],[5,17,23],[6,17,23]] },
+  { name:"一期人会 とうふ家", lat:33.555, lng:133.540, hours:[[0,11,15],[0,17,22],[1,11,15],[1,17,22],[2,11,15],[2,17,22],[3,11,15],[3,17,22],[4,11,15],[4,17,22],[5,11,15],[5,17,22],[6,11,15],[6,17,22]] },
+  { name:"松屋 高知南御座店", lat:33.54587, lng:133.55217, hours:[[0,0,24],[1,0,24],[2,0,24],[3,0,24],[4,0,24],[5,0,24],[6,0,24]] },
+  { name:"くら寿司 高知インター店", lat:33.56412, lng:133.5702, hours:[[0,11,23],[1,11,23],[2,11,23],[3,11,23],[4,11,23],[5,11,23],[6,11,23]] },
+  { name:"マクドナルド 高知杉井流店", lat:33.5761, lng:133.558, hours:[[0,0,24],[1,0,24],[2,0,24],[3,0,24],[4,0,24],[5,0,24],[6,0,24]] },
+  { name:"マクドナルド 稲荷町店", lat:33.561, lng:133.544, hours:[[0,7,24],[1,7,24],[2,7,24],[3,7,24],[4,7,24],[5,7,24],[6,7,24]] },
+  { name:"マクドナルド 帯屋町店", lat:33.560, lng:133.535, hours:[[0,6,22],[1,6,22],[2,6,22],[3,6,22],[4,6,22],[5,6,22],[6,6,22]] },
+  { name:"マクドナルド 中万々店", lat:33.554, lng:133.540, hours:[[0,7,24],[1,7,24],[2,7,24],[3,7,24],[4,7,24],[5,7,24],[6,7,24]] },
+  { name:"マクドナルド はりまや橋3F店", lat:33.559, lng:133.541, hours:[[0,10,21],[1,10,21],[2,10,21],[3,10,21],[4,10,21],[5,10,21],[6,10,21]] },
+  { name:"マクドナルド 春野ケラ店", lat:33.547, lng:133.570, hours:[[0,7,24],[1,7,24],[2,7,24],[3,7,24],[4,7,24],[5,7,24],[6,7,24]] },
+  { name:"マクドナルド 高知大津店", lat:33.552, lng:133.566, hours:[[0,6,24],[1,6,24],[2,6,24],[3,6,24],[4,6,24],[5,6,24],[6,6,24]] }
 ];
 
-// --- マップ初期化 ---
+];
+
+// --- Leafletマップ初期化 ---
 const map = L.map('map').setView([33.558, 133.536], 14);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'&copy; OpenStreetMap contributors'
 }).addTo(map);
 
@@ -53,51 +108,60 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 const markers = L.markerClusterGroup();
 map.addLayer(markers);
 
-// --- 曜日・時間管理 ---
-let currentDay = 0;   // 月曜
-let currentHour = 12; // 12時
-const days = ["月","火","水","木","金","土","日"];
+// --- 曜日・時間状態 ---
+let currentDay = 0;
+let currentHour = 12;
 
+// 曜日名配列
+const dayNames = ["月","火","水","木","金","土","日"];
+
+// マーカー再描画関数
 function updateMarkers() {
   markers.clearLayers();
 
   restaurants.forEach(r => {
-    // 選択中の曜日の営業時間を取得
-    const hours = r.hours.filter(h => h[0] === currentDay);
-    
-    let nowOpen = false;
-    let hoursText = "";
-    
-    if(hours.length > 0){
-      hours.forEach(h=>{
-        hoursText += `${days[h[0]]} ${h[1]}:00〜${h[2]}:00<br>`;
-        if(currentHour >= h[1] && currentHour < h[2]) nowOpen = true;
-      });
-    } else {
-      hoursText = "営業時間情報なし";
+    // 選択曜日に該当する営業時間
+    const hoursToday = r.hours.filter(h => h[0] === currentDay);
+
+    let statusText = "営業時間情報なし";
+    let isOpenNow = false;
+
+    if(hoursToday.length > 0) {
+      // 該当曜日の営業時間テキスト
+      statusText = hoursToday.map(h => {
+        const startH = Math.floor(h[1]);
+        const startM = h[1] % 1 ? "30" : "00";
+        const endH = Math.floor(h[2]);
+        const endM = h[2] % 1 ? "30" : "00";
+        // 今開いてるか
+        if(currentHour >= h[1] && currentHour < h[2]) isOpenNow = true;
+        return `${dayNames[h[0]]} ${startH}:${startM}〜${endH}:${endM}`;
+      }).join("<br>");
     }
 
-    const status = nowOpen ? "営業中" : "閉店中";
+    const openText = isOpenNow ? "営業中" : "閉店中";
 
-    const m = L.marker([r.lat,r.lng])
-      .bindPopup(`<b>${r.name}</b><br>${status}<br>${hoursText}`);
-    
-    markers.addLayer(m);
+    // マーカー作成
+    const popupHTML = `<b>${r.name}</b><br>${openText}<br>${statusText}`;
+    const marker = L.marker([r.lat, r.lng]).bindPopup(popupHTML);
+    markers.addLayer(marker);
   });
 }
 
-// --- スライダーイベント ---
+// スライダー操作
 const slider = document.getElementById('time-slider');
 const timeLabel = document.getElementById('time-label');
-slider.addEventListener('input', e=>{
-  currentHour = parseInt(e.target.value);
-  timeLabel.textContent = `時間: ${currentHour}:00`;
+slider.addEventListener('input', e => {
+  currentHour = parseFloat(e.target.value);
+  const hr = Math.floor(currentHour);
+  const min = currentHour % 1 ? "30":"00";
+  timeLabel.textContent = `時間: ${hr}:${min}`;
   updateMarkers();
 });
 
-// --- 曜日ボタンイベント ---
+// 曜日ボタン操作
 document.querySelectorAll('.weekday-buttons button').forEach(btn=>{
-  btn.addEventListener('click', ()=>{
+  btn.addEventListener('click', () => {
     document.querySelectorAll('.weekday-buttons button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     currentDay = parseInt(btn.dataset.day);
@@ -105,9 +169,10 @@ document.querySelectorAll('.weekday-buttons button').forEach(btn=>{
   });
 });
 
-// --- 初回描画 ---
+// 初回表示
 updateMarkers();
 
 </script>
+
 </body>
 </html>

@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>高知 飲食店マップ（日時フィルタ付き）</title>
+<title>高知 飲食店マップ（営業時間フィルタ付き）</title>
 
 <!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -10,12 +10,11 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 
 <style>
-  body { margin:0; font-family: sans-serif; }
+  body { margin: 0; font-family: sans-serif; }
   #controls {
     padding: 8px;
-    background:#fff;
-    box-shadow: 0 0 4px rgba(0,0,0,0.2);
-    z-index: 1000;
+    background: #fff;
+    border-bottom: 1px solid #ddd;
   }
   .weekday-buttons {
     display: flex;
@@ -24,18 +23,18 @@
     flex-wrap: wrap;
   }
   .weekday-buttons button {
-    padding: 6px 12px;
-    border:none;
-    border-radius:4px;
-    background:#ddd;
-    cursor:pointer;
+    padding: 6px 10px;
+    border: none;
+    border-radius: 4px;
+    background: #ddd;
+    cursor: pointer;
   }
   .weekday-buttons button.active {
-    background:#4CAF50;
-    color:white;
+    background: #4CAF50;
+    color: white;
   }
-  #time-label { margin-right: 10px; }
-  #map { height: 85vh; }
+  #time-label { margin-right: 12px; font-weight: bold; }
+  #map { height: 88vh; width: 100%; }
 </style>
 </head>
 <body>
@@ -50,7 +49,6 @@
     <button data-day="5">土</button>
     <button data-day="6">日</button>
   </div>
-
   <span id="time-label">時間: 12:00</span>
   <input type="range" id="time-slider" min="0" max="23.5" step="0.5" value="12">
 </div>
@@ -62,7 +60,6 @@
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
 <script>
-// --- 店舗データ (ここに全店舗を貼り付ける) ---
 const restaurants = [
   { name:"すき家 本町店", lat:33.5590, lng:133.5310, hours:[[0,4,27],[1,4,27],[2,4,27],[3,4,27],[4,4,27],[5,4,27],[6,4,27]] },
   { name:"すき家 杉井流店", lat:33.5560, lng:133.5350, hours:[[0,4,27],[1,4,27],[2,4,27],[3,4,27],[4,4,27],[5,4,27],[6,4,27]] },
@@ -96,70 +93,65 @@ const restaurants = [
   { name:"マクドナルド 高知大津店", lat:33.552, lng:133.566, hours:[[0,6,24],[1,6,24],[2,6,24],[3,6,24],[4,6,24],[5,6,24],[6,6,24]] }
 ];
 
-// --- Leafletマップ初期化 ---
-const map = L.map('map').setView([33.558, 133.536], 14);
+// --- Leaflet マップ初期化 ---
+const map = L.map('map').setView([33.558,133.536], 14);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
   attribution:'&copy; OpenStreetMap contributors'
 }).addTo(map);
 
-// --- マーカークラスター ---
-const markers = L.markerClusterGroup();
-map.addLayer(markers);
+// MarkerCluster グループ
+const markers = L.markerClusterGroup().addTo(map);
 
-// --- 曜日・時間状態 ---
+// 曜日・時間管理
 let currentDay = 0;
 let currentHour = 12;
 
-// 曜日名配列
+// 曜日名
 const dayNames = ["月","火","水","木","金","土","日"];
 
-// マーカー再描画関数
-function updateMarkers() {
+// 店舗の描画更新
+function updateMarkers(){
   markers.clearLayers();
 
   restaurants.forEach(r => {
-    // 選択曜日に該当する営業時間
-    const hoursToday = r.hours.filter(h => h[0] === currentDay);
+    // 今日の営業時間
+    const todayList = r.hours.filter(h => h[0] === currentDay);
+    // 開店していない場合スキップ
+    if(todayList.length === 0) return;
 
-    let statusText = "営業時間情報なし";
-    let isOpenNow = false;
+    // 「今」開いているか
+    const isOpen = todayList.some(h => currentHour >= h[1] && currentHour < h[2]);
+    if(!isOpen) return; // 閉店中は非表示
 
-    if(hoursToday.length > 0) {
-      // 該当曜日の営業時間テキスト
-      statusText = hoursToday.map(h => {
-        const startH = Math.floor(h[1]);
-        const startM = h[1] % 1 ? "30" : "00";
-        const endH = Math.floor(h[2]);
-        const endM = h[2] % 1 ? "30" : "00";
-        // 今開いてるか
-        if(currentHour >= h[1] && currentHour < h[2]) isOpenNow = true;
-        return `${dayNames[h[0]]} ${startH}:${startM}〜${endH}:${endM}`;
-      }).join("<br>");
-    }
+    // popup 用テキスト（選択曜日）
+    let hoursText = "";
+    todayList.forEach(h => {
+      const sH = Math.floor(h[1]), sM = h[1] % 1 ? "30":"00";
+      const eH = Math.floor(h[2]), eM = h[2] % 1 ? "30":"00";
+      hoursText += `${dayNames[h[0]]} ${sH}:${sM}〜${eH}:${eM}<br>`;
+    });
 
-    const openText = isOpenNow ? "営業中" : "閉店中";
+    const popup = `<b>${r.name}</b><br>営業中<br>${hoursText}`;
+    const m = L.marker([r.lat,r.lng]).bindPopup(popup);
 
-    // マーカー作成
-    const popupHTML = `<b>${r.name}</b><br>${openText}<br>${statusText}`;
-    const marker = L.marker([r.lat, r.lng]).bindPopup(popupHTML);
-    markers.addLayer(marker);
+    markers.addLayer(m);
   });
 }
 
-// スライダー操作
+// スライダー制御
 const slider = document.getElementById('time-slider');
 const timeLabel = document.getElementById('time-label');
-slider.addEventListener('input', e => {
+slider.addEventListener('input', e=>{
   currentHour = parseFloat(e.target.value);
   const hr = Math.floor(currentHour);
-  const min = currentHour % 1 ? "30":"00";
-  timeLabel.textContent = `時間: ${hr}:${min}`;
+  const mn = currentHour % 1 ? "30":"00";
+  timeLabel.textContent = `時間: ${hr}:${mn}`;
   updateMarkers();
 });
 
-// 曜日ボタン操作
+// 曜日ボタン制御
 document.querySelectorAll('.weekday-buttons button').forEach(btn=>{
-  btn.addEventListener('click', () => {
+  btn.addEventListener('click', ()=>{
     document.querySelectorAll('.weekday-buttons button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     currentDay = parseInt(btn.dataset.day);
@@ -167,9 +159,8 @@ document.querySelectorAll('.weekday-buttons button').forEach(btn=>{
   });
 });
 
-// 初回表示
+// 最初に更新
 updateMarkers();
-
 </script>
 
 </body>

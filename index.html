@@ -2,14 +2,13 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>高知市 飲食店マップ</title>
+<title>店舗マップ（営業時間付き）</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
 <style>
-  #map { height: 90vh; width: 100%; }
-  .weekday-buttons button.active { background-color: #4CAF50; color: white; }
-  .weekday-buttons button { margin: 2px; }
+  #map { height: 90vh; }
+  .weekday-buttons button.active { font-weight: bold; }
 </style>
 </head>
 <body>
@@ -32,9 +31,9 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-
 <script>
-// --- 店舗データ（あなたが送ってくれた全データ） ---
+
+
 const restaurants = [
   { name:"すき家 本町店", lat:33.5590, lng:133.5310, hours:[[0,4,27],[1,4,27],[2,4,27],[3,4,27],[4,4,27],[5,4,27],[6,4,27]] },
   { name:"すき家 杉井流店", lat:33.5560, lng:133.5350, hours:[[0,4,27],[1,4,27],[2,4,27],[3,4,27],[4,4,27],[5,4,27],[6,4,27]] },
@@ -93,33 +92,47 @@ const restaurants = [
 ];
 
 // --- マップ初期化 ---
-const map = L.map('map').setView([33.5585, 133.5345], 13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors'
+const map = L.map('map').setView([33.558, 133.536], 14);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'&copy; OpenStreetMap contributors'
 }).addTo(map);
 
+// --- マーカークラスター ---
 const markers = L.markerClusterGroup();
-let currentDay = 0;
-let currentTime = 12;
+map.addLayer(markers);
 
-// --- マーカー更新 ---
+// --- 曜日・時間管理 ---
+let currentDay = 0;   // 月曜
+let currentHour = 12; // 12時
+
 function updateMarkers() {
   markers.clearLayers();
+  const days = ["月","火","水","木","金","土","日"];
+  
   restaurants.forEach(r => {
-    const dayHours = r.hours.filter(h => h[0] === currentDay);
-    for (const h of dayHours) {
-      if (currentTime >= h[1] && currentTime <= h[2]) {
-        markers.addLayer(L.marker([r.lat, r.lng]).bindPopup(r.name));
-        break;
-      }
-    }
+    const nowOpen = r.hours.some(h => h[0] === currentDay && currentHour >= h[1] && currentHour < h[2]);
+    const status = nowOpen ? "営業中" : "閉店中";
+
+    const hoursList = r.hours.map(h => `${days[h[0]]} ${h[1]}:00〜${h[2]}:00`).join("<br>");
+
+    const m = L.marker([r.lat,r.lng])
+      .bindPopup(`<b>${r.name}</b><br>${status}<br>${hoursList}`);
+    markers.addLayer(m);
   });
-  map.addLayer(markers);
 }
 
-// --- 曜日ボタン ---
-document.querySelectorAll('.weekday-buttons button').forEach(btn => {
-  btn.addEventListener('click', () => {
+// --- スライダーイベント ---
+const slider = document.getElementById('time-slider');
+const timeLabel = document.getElementById('time-label');
+slider.addEventListener('input', e=>{
+  currentHour = parseInt(e.target.value);
+  timeLabel.textContent = `時間: ${currentHour}:00`;
+  updateMarkers();
+});
+
+// --- 曜日ボタンイベント ---
+document.querySelectorAll('.weekday-buttons button').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
     document.querySelectorAll('.weekday-buttons button').forEach(b=>b.classList.remove('active'));
     btn.classList.add('active');
     currentDay = parseInt(btn.dataset.day);
@@ -127,20 +140,9 @@ document.querySelectorAll('.weekday-buttons button').forEach(btn => {
   });
 });
 
-// --- 時間スライダー ---
-const slider = document.getElementById('time-slider');
-const label = document.getElementById('time-label');
-slider.addEventListener('input', () => {
-  currentTime = parseFloat(slider.value);
-  const hour = Math.floor(currentTime);
-  const minute = (currentTime - hour) * 60;
-  label.textContent = `時間: ${hour.toString().padStart(2,'0')}:${minute.toString().padStart(2,'0')}`;
-  updateMarkers();
-});
-
-// --- 初回表示 ---
+// --- 初回描画 ---
 updateMarkers();
-</script>
 
+</script>
 </body>
 </html>
